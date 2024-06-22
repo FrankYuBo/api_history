@@ -1,32 +1,21 @@
 import uuid
-import re
 import traceback
+import secrets
 
 from flask import Flask, request, jsonify
-from mysql import MysqlCli
-from log import log
+from utils.mysql import MysqlCli
+from utils.log import log
+from utils.common import *
+from services.auth_service import require_signature
 from setting import *
 
 app = Flask(__name__)
 log.set_file()
 
-# 验证username
-def validate_username(username:str)->bool:
-    if len(username) > 20:
-        return False
-    return True
-
-# 验证手机号
-def validate_phone_number(phone_number:str)->bool:
-    # 使用正则表达式检查手机号格式
-    pattern = re.compile(r'^1[3456789]\d{9}$')
-    if re.match(pattern, phone_number):
-        return True
-    else:
-        return False
 
 # 管理员注册用户接口
-@app.route('/api/v1.0/admin/add_user', methods=['POST'])
+@app.route('/api/v3.0/admin/add_user', methods=['POST'])
+@require_signature
 def add_user():
     resp = {
         "requestid": uuid.uuid4()
@@ -57,7 +46,14 @@ def add_user():
                 }
             )
             cli.close()
-            resp['message'] = f'success to add user:{username}!'
+            secret = secrets.token_hex(16)
+            cli.insert_one("secrets",
+                           {
+                               "username": username,
+                               "secret": secret
+                           })
+            cli.close()
+            resp['message'] = f'success to add user:{username},secretid:{username},secretkey:{secret},remember it!'
             log.logger.info(f"url:{request.url},params:{username},resp:{resp}")
         except Exception:
             log.logger.info(f"url:{request.url},params:{username},resp:{resp}")
@@ -68,7 +64,8 @@ def add_user():
         return jsonify(resp)
 
 # 用户获取信息接口
-@app.route('/api/v1.0/get_user_info', methods=['POST'])
+@app.route('/api/v3.0/get_user_info', methods=['POST'])
+@require_signature
 def get_user_info():
     resp = {
         "requestid": uuid.uuid4()
@@ -87,8 +84,10 @@ def get_user_info():
             return jsonify(resp)
         try:
             cli = MysqlCli(MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE)
-            sql = f"select * from users where username = '{username}' limit 1"
-            user = cli.select_all(sql)
+            sql = f"select * from users where username = %s limit 1"
+            user = cli.select_one(sql,params=(username,))
+            phone_number = user['phone_number']
+            user['phone_number'] = phone_number[:3] + '*' * (len(phone_number) - 7) + phone_number[-4:]
             resp['message'] = f'success to get user:{user}.'
             log.logger.info(f"url:{request.url},params:{username},resp:{resp}")
         except Exception:
@@ -98,7 +97,3 @@ def get_user_info():
     else:
         resp['error'] = "Invalid JSON format in request"
         return jsonify(resp)
-
-
-if __name__ == '__main__':
-    app.run()

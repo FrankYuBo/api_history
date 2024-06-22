@@ -37,17 +37,17 @@ def add_user():
         if username is None:
             resp['error'] = 'username is required'
             log.logger.error(f"url:{request.url},params:{username},resp:{resp}")
-            return jsonify(resp)
+            return jsonify(resp),400
         phone_number = data.get('phone_number')
         if phone_number is None:
             resp['error'] = 'phone_number is required'
             log.logger.error(f"url:{request.url},params:{phone_number},resp:{resp}")
-            return jsonify(resp)
+            return jsonify(resp),400
 
         if not validate_username(username):
             resp['error'] = 'username length should not exceed 10'
             log.logger.error(f"url:{request.url},params:{username},resp:{resp}")
-            return jsonify(resp)
+            return jsonify(resp),400
         try:
             cli = MysqlCli(MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE)
             cli.insert_one("users",
@@ -59,13 +59,14 @@ def add_user():
             cli.close()
             resp['message'] = f'success to add user:{username}!'
             log.logger.info(f"url:{request.url},params:{username},resp:{resp}")
+            return jsonify(resp)
         except Exception:
             log.logger.info(f"url:{request.url},params:{username},resp:{resp}")
             resp['error'] = f"failed to insert to mysql:{traceback.format_exc()}"
-        return jsonify(resp)
+            return jsonify(resp),500
     else:
         resp['error'] = "Invalid JSON format in request"
-        return jsonify(resp)
+        return jsonify(resp),400
 
 # 用户获取信息接口
 @app.route('/api/v1.0/get_user_info', methods=['POST'])
@@ -79,25 +80,26 @@ def get_user_info():
         if username is None:
             resp['error'] = 'username is required'
             log.logger.error(f"url:{request.url},params:{username},resp:{resp}")
-            return jsonify(resp)
+            return jsonify(resp),400
 
         if not validate_username(username):
             resp['error'] = 'username length should not exceed 10'
             log.logger.error(f"url:{request.url},params:{username},resp:{resp}")
-            return jsonify(resp)
+            return jsonify(resp),400
         try:
             cli = MysqlCli(MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE)
             sql = f"select * from users where username = '{username}' limit 1"
             user = cli.select_all(sql)
             resp['message'] = f'success to get user:{user}.'
             log.logger.info(f"url:{request.url},params:{username},resp:{resp}")
+            return jsonify(resp)
         except Exception:
             resp['error'] = f'failed to get user, error:{traceback.format_exc()}'
             log.logger.error(f"url:{request.url},params:{username},resp:{resp}")
-        return jsonify(resp)
+            return jsonify(resp),500
     else:
         resp['error'] = "Invalid JSON format in request"
-        return jsonify(resp)
+        return jsonify(resp),400
 
 
 if __name__ == '__main__':
